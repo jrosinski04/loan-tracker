@@ -12,7 +12,7 @@ st.markdown("""
     <link rel="icon" href="{ICON_DATA}">
     <style>
            .block-container {
-                padding-top: 50px;
+                padding-top: 10px;
             }
 
             /* Dark Blurry Blue/Purple Gradient Background */
