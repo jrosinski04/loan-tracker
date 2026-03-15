@@ -49,16 +49,37 @@ else:
     email = st.session_state.user.email
 
     # Main dashboard
-    col1, image, col2 = st.columns([4,2,1])
-    col1.title("Car Finance Dashboard")
+    col1, image, col2 = st.columns([7,2,1])
+    with col1:
+        st.title("Car Finance Dashboard")
+        st.write(f"Logged in as: **{email}**")
+
     with image:
         st.image("seatibiza.png", width=200)
-    if col2.button("Log Out"):
-        supabase.auth.sign_out()
-        del st.session_state.user
-        del st.session_state.session
-        st.rerun()
-    st.write(f"Logged in as: **{email}**")
+    with col2:
+        # --- ADD THIS: Account Settings UI ---
+        with st.popover("⚙️ Settings"):
+            st.write("Update Password")
+            new_password = st.text_input("New Password", type="password", key="new_pw")
+            if st.button("Save New Password"):
+                try:
+                    # This securely updates the password in the Supabase vault
+                    supabase.auth.update_user({"password": new_password})
+                    st.success("Password updated! Log out and log back in to use the new password.")
+                except Exception as e:
+                    st.error("Failed to update password.")
+            
+            st.divider()
+            
+            # Move your existing logout button inside this settings menu to keep it clean!
+            if st.button("Logout", use_container_width=True):
+                supabase.auth.sign_out()
+                if "user" in st.session_state:
+                    del st.session_state.user
+                if "session" in st.session_state:
+                    del st.session_state.session
+                st.rerun()
+
     st.divider()
 
     # Fetching loan data
