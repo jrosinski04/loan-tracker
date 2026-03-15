@@ -40,7 +40,7 @@ else:
 
     # Main dashboard
     col1, col2 = st.columns([3,1])
-    col1.title("Dashboard")
+    col1.title("Car Finance Dashboard")
     if col2.button("Log Out"):
         supabase.auth.sign_out()
         del st.session_state.user
@@ -48,8 +48,6 @@ else:
         st.rerun()
     st.write(f"Logged in as: **{email}**")
     st.divider()
-
-    st.image("seatibiza.jpeg", use_container_width=True)
 
     # Fetching loan data
     loan_response = supabase.table("loans").select("*").execute()
@@ -69,10 +67,14 @@ else:
         balance = float(loan["total_amount"]) - total_paid
 
         # Display loan details
-        m1, m2, m3 = st.columns(3)
+        image, m1, m2, m3 = st.columns(4)
+        with image:
+            st.image("seatibiza.png", width=200)
         m1.metric("Total Amount", f"£{loan['total_amount']:.2f}")
         m2.metric("Total Paid", f"£{total_paid:.2f}")
         m3.metric("Remaining Balance", f"£{balance:.2f}")
+
+
 
         st.divider()
 
