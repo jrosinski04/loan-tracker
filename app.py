@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client
 import resend
 import plotly.graph_objects as go
+import pandas as pd
 
 # Configuraton
 
@@ -12,6 +13,77 @@ st.markdown("""
     <style>
            .block-container {
                 padding-top: 50px;
+            }
+
+            /* Dark Blurry Blue/Purple Gradient Background */
+            .stApp {
+                background: linear-gradient(135deg, #0d1128 0%, #1a1025 50%, #0d1128 100%);
+            }
+            
+            /* Make the top header transparent */
+            [data-testid="stHeader"] {
+                background: rgba(0,0,0,0);
+            }
+
+            /* =========================================
+               1. FORMS & BUTTONS
+               ========================================= */
+            [data-testid="stForm"] {
+                background-color: rgba(255, 255, 255, 0.03) !important;
+                border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                border-radius: 15px !important;
+                padding: 20px !important;
+                backdrop-filter: blur(10px); 
+            }
+
+            button[kind="secondary"], button[kind="primary"],
+            button[kind="secondaryFormSubmit"], button[kind="primaryFormSubmit"] {
+                background-color: rgba(255, 255, 255, 0.08) !important;
+                border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                color: white !important;
+                border-radius: 8px !important;
+                backdrop-filter: blur(5px);
+                transition: all 0.3s ease !important;
+            }
+
+            button[kind="secondary"]:hover, button[kind="primary"]:hover,
+            button[kind="secondaryFormSubmit"]:hover, button[kind="primaryFormSubmit"]:hover {
+                background-color: rgba(255, 255, 255, 0.15) !important;
+                border: 1px solid rgba(255, 255, 255, 0.4) !important;
+            }
+
+            /* =========================================
+               2. THE PAYMENT HISTORY TABLE
+               ========================================= */
+            [data-testid="stTable"] {
+                background-color: rgba(255, 255, 255, 0.03) !important;
+                backdrop-filter: blur(10px) !important;
+                border-radius: 10px !important;
+                overflow: hidden !important;
+            }
+            
+            /* Table Headers */
+            [data-testid="stTable"] th {
+                background-color: rgba(255, 255, 255, 0.1) !important;
+                color: white !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+                font-weight: bold !important;
+            }
+            
+            /* Table Rows */
+            [data-testid="stTable"] td {
+                background-color: transparent !important;
+                color: rgba(255, 255, 255, 0.9) !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            }
+            
+            /* Hover effect for table rows */
+            [data-testid="stTable"] tr:hover td {
+                background-color: rgba(255, 255, 255, 0.05) !important;
+            }
+
+            [data-testid="stTable"] th:first-child {
+                display: none !important;
             }
     </style>
     """, unsafe_allow_html=True)
@@ -92,7 +164,7 @@ else:
         is_borrower = (email == loan["borrower_email"])
 
         # Fetching payment details
-        pay_response = supabase.table("payments").select("*").eq("loan_id", loan["id"]).execute()
+        pay_response = supabase.table("payments").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
         payments = pay_response.data
 
         # Calculate totals
@@ -110,12 +182,12 @@ else:
             number = {'prefix': "£", 'valueformat': ",.2f"},
             gauge = {
                 'axis': {'range': [0, float(loan['total_amount'])], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                'bar': {'color': "#2e7d32"}, # A nice dark green
-                'bgcolor': "white",
-                'borderwidth': 2,
-                'bordercolor': "gray",
+                'bar': {'color': "rgba(76, 175, 80, 0.6)"}, # A nice dark green
+                'bgcolor': "rgba(0,0,0,0)",
+                'borderwidth': 1,
+                'bordercolor': "rgba(255, 255, 255, 0.2)",
                 'steps': [
-                    {'range': [0, float(loan['total_amount'])], 'color': "#e8f5e9"} # Light green background
+                    {'range': [0, float(loan['total_amount'])], 'color': "rgba(255,255,255,0.05)"} # Light green background
                 ]
             }
         ))
@@ -128,19 +200,19 @@ else:
             number = {'prefix': "£", 'valueformat': ",.2f"},
             gauge = {
                 'axis': {'range': [0, float(loan['total_amount'])]},
-                'bar': {'color': "#c62828"}, # A nice dark red
-                'bgcolor': "white",
-                'borderwidth': 2,
-                'bordercolor': "gray",
+                'bar': {'color': "rgba(244, 67, 54, 0.6)"}, # A nice dark red
+                'bgcolor': "rgba(0,0,0,0)",
+                'borderwidth': 1,
+                'bordercolor': "rgba(255, 255, 255, 0.2)",
                 'steps': [
-                    {'range': [0, float(loan['total_amount'])], 'color': "#ffebee"} # Light red background
+                    {'range': [0, float(loan['total_amount'])], 'color': "rgba(255,255,255,0.05)"} # Light red background
                 ]
             }
         ))
 
         # Render the charts in Streamlit
-        fig1.update_layout(height=300, margin=dict(l=10, r=10, t=50, b=10))
-        fig2.update_layout(height=300, margin=dict(l=10, r=10, t=50, b=10))
+        fig1.update_layout(height=300, paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"}, margin=dict(l=10, r=10, t=50, b=10))
+        fig2.update_layout(height=300, paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"}, margin=dict(l=10, r=10, t=50, b=10))
         
         dial_col1.plotly_chart(fig1, use_container_width=True)
         dial_col2.plotly_chart(fig2, use_container_width=True)
@@ -169,7 +241,7 @@ else:
 
                     try:
                         resend.Emails.send({
-                            "from": "onboarding@resend.dev",
+                            "from": "info@zbuk.org",
                             "to": loan["lender_email"],
                             "subject": f"💸 New Loan Payment Received!",
                             "html": f"""
@@ -193,6 +265,8 @@ else:
                 "Amount": f"£{p['amount']:.2f}",
                 "Note": p['note'] or "N/A"
             } for p in payments]
-            st.dataframe(display_data, use_container_width=True, hide_index=True)
+
+            df = pd.DataFrame(display_data)
+            st.table(df.style.hide(axis="index"))
         else:
             st.write("No payments recorded yet.")
