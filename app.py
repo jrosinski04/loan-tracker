@@ -266,10 +266,19 @@ else:
         # Payment history
         st.subheader("Payment History")
         if payments:
+            # Calculate remaining balance after each payment
+            payments_asc = sorted(payments, key=lambda x: x['created_at'])
+            cumulative_paid = 0
+            remaining_dict = {}
+            for p in payments_asc:
+                cumulative_paid += p['amount']
+                remaining_dict[p['id']] = float(loan['total_amount']) - cumulative_paid
+
             display_data = [{
                 "Date": p['created_at'][:10],
                 "Amount": f"£{p['amount']:.2f}",
-                "Note": p['note'] or "N/A"
+                "Remaining": f"£{remaining_dict[p['id']]:.2f}",
+                "Note": p['note'] or "N/A",
             } for p in payments]
 
             df = pd.DataFrame(display_data)
