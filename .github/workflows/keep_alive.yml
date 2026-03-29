@@ -1,15 +1,21 @@
-name: Keep Supabase Alive
+name: Keep Everything Warm
 on:
   schedule:
-    - cron: '0 0 * * 1,4' # Runs every Monday and Thursday at midnight
-  workflow_dispatch: # Allows manual run
+    # This runs every day at 9:00 AM UTC (roughly morning in the UK/Europe)
+    - cron: '0 9 * * *' 
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Database
+      - name: Ping Supabase (Database Heartbeat)
         run: |
           curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/loans?select=id&limit=1" \
           -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
           -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}"
+      
+      - name: Wake up Streamlit (App Warm-up)
+        # Using -L to follow redirects and -I to just fetch the header 
+        # (Enough to trigger Streamlit's "Wake Up" process)
+        run: curl -L -I https://zbuk.org
