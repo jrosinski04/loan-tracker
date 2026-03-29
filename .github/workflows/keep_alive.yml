@@ -18,4 +18,4 @@ jobs:
       - name: Wake up Streamlit (App Warm-up)
         # Using -L to follow redirects and -I to just fetch the header 
         # (Enough to trigger Streamlit's "Wake Up" process)
-        run: curl -L -I https://zbuk.org
+        run: curl -fsSLk https://loan-tracker.streamlit.app -o /dev/null
