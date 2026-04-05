@@ -1,22 +1,27 @@
-name: Keep Everything Warm
+name: Aggressive Heartbeat
 on:
   schedule:
-    # This runs every day at 9:00 AM UTC (roughly morning in the UK/Europe)
-    - cron: '0 9 * * *' 
-  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
+    # Runs every 4 hours (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase (Database Heartbeat)
+      - name: Force Supabase Activity (Write Operation)
         run: |
-          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/loans?select=id&limit=1" \
+          curl -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/heartbeat" \
           -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}"
-      
-      - name: Wake up Streamlit (App Warm-up)
-        # Using -L to follow redirects and -I to just fetch the header 
-        # (Enough to trigger Streamlit's "Wake Up" process)
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
+          -H "Content-Type: application/json" \
+          -H "Prefer: resolution=merge-duplicates" \
+          -d '{"id": 1, "last_ping": "now()"}'
+
+      - name: Wake up Streamlit (User Simulation)
+        # Hit the URL 3 times in a row to ensure the spin-up is triggered
         run: |
-          curl -s -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" https://zbuk.org || true
+          for i in {1..3}; do
+            curl -s -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" https://zbuk.org
+            sleep 5
+          done
