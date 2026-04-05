@@ -1,8 +1,12 @@
+import time
 import streamlit as st
 from supabase import create_client
+from streamlit_cookies_controller import CookieController
 import resend
 import plotly.graph_objects as go
 import pandas as pd
+
+cookies = CookieController()
 
 TITLE = "Loan Tracker"
 st.set_page_config(page_title=TITLE, page_icon="💸", layout="wide")
@@ -106,9 +110,42 @@ if "session" in st.session_state:
         st.session_state.session.refresh_token
     )
 
+def load_session():
+    # Checking if user is already logged in (session exists)
+    if "user" in st.session_state:
+        return st.session_state.user
+    
+    # If not, checking browser cookies
+    all_cookies = cookies.getAll()
 
+    access_token = all_cookies.get("sb-access-token")
+    refresh_token = all_cookies.get("sb-refresh-token")
+
+    if not access_token or not refresh_token:
+        time.sleep(0.2)
+        return None
+
+    if access_token and refresh_token:
+        try:
+            # Re-authenticate using saved tokens
+            res = supabase.auth.set_session(access_token, refresh_token)
+            st.session_state.user = res.user
+            st.session_state.session = res.session
+            return res.user
+        except Exception as e:
+            cookies.remove("sb-access-token")
+            cookies.remove("sb-refresh-token")
+    return None
+
+user = load_session()
 # Authentication
-if "user" not in st.session_state:
+
+if user is None:
+    all_cookies = cookies.getAll()
+    if cookies.get("sb-access-token") or cookies.get("sb-refresh-token"):
+        st.rerun()
+
+if user is None or not user:
     st.title(TITLE)
     st.write("Please log in to view your dashboard.")
 
@@ -121,6 +158,14 @@ if "user" not in st.session_state:
                 res = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state.user = res.user
                 st.session_state.session = res.session
+
+                from datetime import datetime, timedelta
+                expires = datetime.now() + timedelta(days=7)
+
+                cookies.set("sb-access-token", res.session.access_token, expires=expires, secure=True, samesite="Lax")
+                cookies.set("sb-refresh-token", res.session.refresh_token, expires=expires, secure=True, samesite="Lax")
+
+                time.sleep(1)
                 st.rerun()
             except Exception as e:
                 st.error("Login failed: " + str(e))
@@ -144,7 +189,6 @@ else:
     if loan_response.data:
         if loan.get('note') == "SEAT IBIZA":
             TITLE = "Car Finance Dashboard"
-            st.set_page_config(page_title=TITLE, page_icon="seatibiza.png", layout="wide")
             ICON_DATA = "seatibiza.png"
             IMAGE = "seatibiza.png"
 
@@ -174,10 +218,10 @@ else:
             # Move your existing logout button inside this settings menu to keep it clean!
             if st.button("Logout", use_container_width=True):
                 supabase.auth.sign_out()
-                if "user" in st.session_state:
-                    del st.session_state.user
-                if "session" in st.session_state:
-                    del st.session_state.session
+                cookies.remove("sb-access-token")
+                cookies.remove("sb-refresh-token")
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.rerun()
 
     st.divider()
