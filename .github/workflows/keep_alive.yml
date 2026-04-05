@@ -37,7 +37,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
           HOUR=$(date +%H)
-          if ["$HOUR" == "08" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          if [ "$HOUR" == "08" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             python reminders.py
           else
             echo "Skipping reminders: only runs at 08:00 UTC"
