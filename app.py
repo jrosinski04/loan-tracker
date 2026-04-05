@@ -166,7 +166,6 @@ if user is None or not user:
                 cookies.set("sb-access-token", res.session.access_token, expires=expires, secure=True, same_site="Lax")
                 cookies.set("sb-refresh-token", res.session.refresh_token, expires=expires, secure=True, same_site="Lax")
 
-                time.sleep(1)
                 st.rerun()
             except Exception as e:
                 st.error("Login failed: " + str(e))
@@ -262,8 +261,9 @@ else:
         payments = pay_response.data
 
         # Calculate totals
-        total_paid = sum(p["amount"] for p in payments)
-        balance = float(loan["total_amount"]) - total_paid
+        total_paid_raw = sum(p["amount"] for p in payments)
+        total_paid = max(total_paid_raw, 0)
+        balance = float(loan["total_amount"]) - total_paid_raw
 
         # Graphical Visual Summary (The Dials)
         dial_col1, dial_col2 = st.columns(2)
@@ -287,19 +287,20 @@ else:
         ))
         
         # Dial 2: Remaining Balance (Red/Orange)
+        remaining_max = max(float(loan['total_amount']), balance, 0)
         fig2 = go.Figure(go.Indicator(
             mode = "gauge+number",
             value = balance,
             title = {'text': "Remaining Balance (£)", 'font': {'size': 24}},
             number = {'prefix': "£", 'valueformat': ",.2f"},
             gauge = {
-                'axis': {'range': [0, float(loan['total_amount'])]},
+                'axis': {'range': [0, remaining_max]},
                 'bar': {'color': "rgba(244, 67, 54, 0.6)"}, # A nice dark red
                 'bgcolor': "rgba(0,0,0,0)",
                 'borderwidth': 1,
                 'bordercolor': "rgba(255, 255, 255, 0.2)",
                 'steps': [
-                    {'range': [0, float(loan['total_amount'])], 'color': "rgba(255,255,255,0.05)"} # Light red background
+                    {'range': [0, remaining_max], 'color': "rgba(255,255,255,0.05)"} # Light red background
                 ]
             }
         ))
@@ -321,32 +322,54 @@ else:
         if can_record:
             st.subheader("Record a Payment")
             with st.form("payment_form", clear_on_submit=True):
-                amount = st.number_input("Payment Amount", min_value=100.00, max_value=float(balance), step=1.0)
+                payment_label = "Amount to Lend" if is_lender else "Payment Amount"
+                if is_lender:
+                    amount = st.number_input(payment_label, min_value=20.00, step=1.0)
+                else:
+                    amount = st.number_input(payment_label, min_value=20.00, max_value=float(balance), step=1.0)
                 note = st.text_input("Note (optional)")
 
                 if st.form_submit_button("Submit Payment"):
                     # Insert the payment into Supabase
                     supabase.table("payments").insert({
                         "loan_id": loan['id'],
-                        "amount": amount,
+                        "amount": -amount if is_lender else amount,
                         "note": note,
                         "paid_by": email
                     }).execute()
 
-                    try:
-                        resend.Emails.send({
-                            "from": "info@zbuk.org",
-                            "to": loan["lender_email"],
-                            "subject": f"💸 New Loan Payment Received!",
-                            "html": f"""
-                                <h1>Payment Received</h1>
-                                <p><strong>{username}</strong> has made a payment of <strong>£{amount:.2f}</strong> towards the loan.</p>
-                                <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
-                            """
-                        })
+                    # Send email notification to lender
+                    if is_borrower:
+                        try:
+                            resend.Emails.send({
+                                "from": "info@zbuk.org",
+                                "to": loan["lender_email"],
+                                "subject": f"💸 New Loan Payment Received!",
+                                "html": f"""
+                                    <h1>Payment Received</h1>
+                                    <p><strong>{username}</strong> has made a payment of <strong>£{amount:.2f}</strong> towards the loan.</p>
+                                    <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
+                                """
+                            })
 
-                    except Exception as e:
-                        st.warning("Payment recorded, but failed to send email notification: " + str(e))
+                        except Exception as e:
+                            st.warning("Payment recorded, but failed to send email notification: " + str(e))
+
+                    # Send email notification to borrower
+                    if is_lender:
+                        try:
+                            resend.Emails.send({
+                                "from": "info@zbuk.org",
+                                "to": loan["borrower_email"],
+                                "subject": f"💸 New Loan Payment Recorded by Lender",
+                                "html": f"""
+                                    <h1>Payment Recorded</h1>
+                                    <p><strong>{username}</strong> has lent an additional <strong>£{amount:.2f}</strong>.</p>
+                                    <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
+                                """
+                            })
+                        except Exception as e:
+                            st.warning("Payment recorded, but failed to send email notification: " + str(e))
 
                     st.success("Payment recorded successfully!")
                     st.rerun()
