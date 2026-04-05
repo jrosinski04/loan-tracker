@@ -1,7 +1,6 @@
 name: Aggressive Heartbeat
 on:
   schedule:
-    # Runs every 4 hours (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
     - cron: '0 */4 * * *'
   workflow_dispatch:
 
@@ -10,18 +9,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Force Supabase Activity (Write Operation)
+        # Added -k to fix Error 35
+        # Using $(date) to send a fresh timestamp so the DB registers a change
         run: |
-          curl -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/heartbeat" \
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          curl -k -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/heartbeat" \
           -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
           -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
           -H "Content-Type: application/json" \
           -H "Prefer: resolution=merge-duplicates" \
-          -d '{"id": 1, "last_ping": "now()"}'
+          -d "{\"id\": 1, \"last_ping\": \"$TIMESTAMP\"}"
 
       - name: Wake up Streamlit (User Simulation)
-        # Hit the URL 3 times in a row to ensure the spin-up is triggered
         run: |
           for i in {1..3}; do
-            curl -s -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" https://zbuk.org
+            curl -fsSLk -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" https://zbuk.org || true
             sleep 5
           done
