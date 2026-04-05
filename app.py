@@ -4,9 +4,10 @@ import resend
 import plotly.graph_objects as go
 import pandas as pd
 
-st.set_page_config(page_title="Loan Tracker", page_icon="seatibiza.png", layout="wide")
+TITLE = "Loan Tracker"
+st.set_page_config(page_title=TITLE, page_icon="💸", layout="wide")
 
-ICON_DATA = "seatibiza.png" 
+ICON_DATA = "💸" 
 st.markdown("""
     <link rel="apple-touch-icon" href="{ICON_DATA}">
     <link rel="icon" href="{ICON_DATA}">
@@ -105,9 +106,10 @@ if "session" in st.session_state:
         st.session_state.session.refresh_token
     )
 
+
 # Authentication
 if "user" not in st.session_state:
-    st.title("Car Finance Tracker")
+    st.title(TITLE)
     st.write("Please log in to view your dashboard.")
 
     with st.form("login_form"):
@@ -126,14 +128,33 @@ if "user" not in st.session_state:
 else:
     email = st.session_state.user.email
 
+    # Fetching loan data
+    loan_response = supabase.table("loans").select("*").execute()
+
+    if not loan_response.data:
+        st.write("No loans found.")
+    else:
+        loan = loan_response.data[0]
+
     # Main dashboard
     col1, image, col2 = st.columns([7,2,1])
+
+    IMAGE = None
+    if loan_response.data:
+        if loan.get('note') == "SEAT IBIZA":
+            TITLE = "Car Finance Dashboard"
+            st.set_page_config(page_title=TITLE, page_icon="seatibiza.png", layout="wide")
+            ICON_DATA = "seatibiza.png"
+            IMAGE = "seatibiza.png"
+
     with col1:
-        st.title("Car Finance Dashboard")
+        st.title(TITLE)
         st.write(f"Logged in as: **{email}**")
 
     with image:
-        st.image("seatibiza.png", width=200)
+        if IMAGE:
+            st.image(IMAGE, width=200)
+
     with col2:
         # --- ADD THIS: Account Settings UI ---
         with st.popover("⚙️ Settings"):
@@ -160,14 +181,18 @@ else:
 
     st.divider()
 
-    # Fetching loan data
-    loan_response = supabase.table("loans").select("*").execute()
-
-    if not loan_response.data:
-        st.write("No loans found.")
-    else:
-        loan = loan_response.data[0]
+    if loan_response.data:
+        
+        # Identifying th euser's role for the loan (borrower or lender)
         is_borrower = (email == loan["borrower_email"])
+        is_lender = (email == loan["lender_email"])
+
+        # Checking if user has permission to record payments
+        can_record = False
+        if is_borrower and loan.get('borrower_can_record_payment'):
+            can_record = True
+        elif is_lender and loan.get('lender_can_record_payment'):
+            can_record = True
 
         # Fetching payment details
         pay_response = supabase.table("payments").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
@@ -230,7 +255,7 @@ else:
         st.divider()
 
         # Record payment
-        if is_borrower:
+        if can_record:
             st.subheader("Record a Payment")
             with st.form("payment_form", clear_on_submit=True):
                 amount = st.number_input("Payment Amount", min_value=100.00, max_value=float(balance), step=1.0)
