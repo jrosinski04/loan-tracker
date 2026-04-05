@@ -104,6 +104,9 @@ st.markdown("""
 supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 resend.api_key = st.secrets["RESEND_API_KEY"]
 
+# Store cookies securely in production, but allow a local override for HTTP development.
+USE_SECURE_COOKIES = st.secrets.get("USE_SECURE_COOKIES", True)
+
 # Restore the Supabase session
 if "session" in st.session_state:
     supabase.auth.set_session(
@@ -163,8 +166,8 @@ if user is None or not user:
                 from datetime import datetime, timedelta
                 expires = datetime.now() + timedelta(days=7)
 
-                cookies.set("sb-access-token", res.session.access_token, expires=expires, secure=True, same_site="Lax")
-                cookies.set("sb-refresh-token", res.session.refresh_token, expires=expires, secure=True, same_site="Lax")
+                cookies.set("sb-access-token", res.session.access_token, expires=expires, secure=USE_SECURE_COOKIES, same_site="Lax")
+                cookies.set("sb-refresh-token", res.session.refresh_token, expires=expires, secure=USE_SECURE_COOKIES, same_site="Lax")
 
                 st.rerun()
             except Exception as e:
