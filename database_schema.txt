@@ -1,0 +1,32 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.heartbeat (
+  id integer NOT NULL,
+  last_ping timestamp with time zone DEFAULT now(),
+  CONSTRAINT heartbeat_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.loans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  lender_email text NOT NULL,
+  borrower_email text NOT NULL,
+  total_amount numeric NOT NULL,
+  currency text DEFAULT 'GBP'::text,
+  start_date date,
+  length numeric,
+  note text,
+  lender_can_record_payment boolean NOT NULL,
+  borrower_can_record_payment boolean NOT NULL,
+  payment_day smallint,
+  CONSTRAINT loans_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT (now() AT TIME ZONE 'utc'::text),
+  amount numeric NOT NULL,
+  paid_by text NOT NULL,
+  note text,
+  loan_id uuid NOT NULL,
+  CONSTRAINT payments_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_loan_id_fkey FOREIGN KEY (loan_id) REFERENCES public.loans(id)
+);

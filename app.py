@@ -9,6 +9,7 @@ import pandas as pd
 cookies = CookieController()
 
 TITLE = "Loan Tracker"
+IMAGE = None
 st.set_page_config(page_title=TITLE, page_icon="💸", layout="wide")
 
 ICON_DATA = "💸" 
@@ -174,23 +175,40 @@ else:
     email = st.session_state.user.email
     username = st.session_state.user.user_metadata.get("display_name") or email.split("@")[0]
 
-    # Fetching loan data
-    loan_response = supabase.table("loans").select("*").execute()
+    # Fetch loans AND the lender's display name from our new view
+    # We 'join' the lender_names view using the lender_id
+    loan_query = supabase.table("loans").select("""
+        *,
+        lender:lender_names!lender_id(display_name)
+    """).execute()  
 
-    if not loan_response.data:
-        st.write("No loans found.")
+    loans = loan_query.data
+
+    if not loans:
+        st.write("No loans found for your account.")
+        st.stop()
+
+    loan_options = []
+
+    for l in loans:
+        lender_name = l.get('lender', {}).get('display_name')
+        lender_display = lender_name if lender_name else l['lender_email']
+        label = f"{l['note']} - £{l['total_amount']} (Lender: {lender_display})"
+        loan_options.append({"label": label, "data": l})
+
+    if len(loans) > 1:
+        selected_label = st.selectbox("Choose a loan to view", options=[o["label"] for o in loan_options])
+        loan = next(o["data"] for o in loan_options if o["label"] == selected_label)
     else:
-        loan = loan_response.data[0]
+        loan = loans[0]
 
     # Main dashboard
     col1, image, col2 = st.columns([7,2,1])
 
-    IMAGE = None
-    if loan_response.data:
-        if loan.get('note') == "SEAT IBIZA":
-            TITLE = "Car Finance Dashboard"
-            ICON_DATA = "seatibiza.png"
-            IMAGE = "seatibiza.png"
+    if loan.get('note') == "SEAT IBIZA":
+        TITLE = "Car Finance Dashboard"
+        ICON_DATA = "seatibiza.png"
+        IMAGE = "seatibiza.png"
 
     with col1:
         st.title(TITLE)
@@ -226,9 +244,9 @@ else:
 
     st.divider()
 
-    if loan_response.data:
+    if loan:
         
-        # Identifying th euser's role for the loan (borrower or lender)
+        # Identifying the user's role for the loan (borrower or lender)
         is_borrower = (email == loan["borrower_email"])
         is_lender = (email == loan["lender_email"])
 
@@ -322,7 +340,7 @@ else:
                             "subject": f"💸 New Loan Payment Received!",
                             "html": f"""
                                 <h1>Payment Received</h1>
-                                <p><strong>{email}</strong> has made a payment of <strong>£{amount:.2f}</strong> towards the loan.</p>
+                                <p><strong>{username}</strong> has made a payment of <strong>£{amount:.2f}</strong> towards the loan.</p>
                                 <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
                             """
                         })

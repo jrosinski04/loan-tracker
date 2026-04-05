@@ -1,0 +1,7 @@
+update auth.users
+set raw_user_meta_data = jsonb_set(
+    coalesce(raw_user_meta_data, '{}'::jsonb), 
+    '{display_name}', 
+    '"John Doe"'
+)
+where email = 'borrower@zbuk.org';
