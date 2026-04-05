@@ -162,8 +162,8 @@ if user is None or not user:
                 from datetime import datetime, timedelta
                 expires = datetime.now() + timedelta(days=7)
 
-                cookies.set("sb-access-token", res.session.access_token, expires=expires, secure=True, samesite="Lax")
-                cookies.set("sb-refresh-token", res.session.refresh_token, expires=expires, secure=True, samesite="Lax")
+                cookies.set("sb-access-token", res.session.access_token, expires=expires, secure=True, same_site="Lax")
+                cookies.set("sb-refresh-token", res.session.refresh_token, expires=expires, secure=True, same_site="Lax")
 
                 time.sleep(1)
                 st.rerun()
