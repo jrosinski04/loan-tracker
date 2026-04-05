@@ -36,9 +36,18 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
+          # 1. Listing files
+          echo "Current directory contents:"
+          ls -R
+
+          # 2. Extracting Hour
           HOUR=$(date +%H)
-          if [ "$HOUR" == "08" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            python reminders.py
+          echo "Current UTC Hour: $HOUR"
+
+          # 3. Logic Check
+          if [ "$HOUR" = "08" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Condition met. Starting reminders..."
+            python -u reminders.py
           else
-            echo "Skipping reminders: only runs at 08:00 UTC"
+            echo "Skipping reminders: only runs at 08:00 UTC."
           fi
