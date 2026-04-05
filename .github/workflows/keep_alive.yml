@@ -26,3 +26,19 @@ jobs:
             curl -fsSLk -o /dev/null -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" https://zbuk.org || true
             sleep 5
           done
+
+      - name: Install dependencies for Reminders
+        run: pip install supabase resend
+
+      - name: Run Payment Reminders
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          HOUR=$(date +%H)
+          if ["$HOUR" == "08" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            python reminders.py
+          else
+            echo "Skipping reminders: only runs at 08:00 UTC"
+          fi
