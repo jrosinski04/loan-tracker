@@ -127,6 +127,7 @@ if "user" not in st.session_state:
 
 else:
     email = st.session_state.user.email
+    username = st.session_state.user.user_metadata.get("display_name") or email.split("@")[0]
 
     # Fetching loan data
     loan_response = supabase.table("loans").select("*").execute()
@@ -149,7 +150,7 @@ else:
 
     with col1:
         st.title(TITLE)
-        st.write(f"Logged in as: **{email}**")
+        st.write(f"Logged in as: **{username}**")
 
     with image:
         if IMAGE:
