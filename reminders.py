@@ -11,8 +11,9 @@ resend.api_key = os.environ.get("RESEND_API_KEY")
 
 def send_monthly_reminders():
 
-    # Reminder for payments due tomorrow
     today = datetime.date.today()
+
+    # Reminder for payments due tomorrow
     reminder_target_day = (today + datetime.timedelta(days=1)).day
 
     loans = supabase.table("loans").select("*").eq("payment_day", reminder_target_day).execute().data
@@ -34,7 +35,8 @@ def send_monthly_reminders():
             print(f"Failed to send reminder to {loan['borrower_email']}: {str(e)}")
 
     # Reminder for payments due today
-    loans = supabase.table("loans").select("*").eq("payment_day", today).execute().data
+    reminder_target_day = today.day
+    loans = supabase.table("loans").select("*").eq("payment_day", reminder_target_day).execute().data
 
     for loan in loans:
         try:
