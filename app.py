@@ -311,3 +311,33 @@ else:
             st.table(df.style.hide(axis="index"))
         else:
             st.write("No payments recorded yet.")
+
+st.markdown("---")
+with st.expander("📄 Privacy Policy"):
+    st.markdown("""
+    <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6);">
+    <strong>Data Privacy at a Glance</strong><br>
+    Last Updated: April 2026<br><br>
+
+    <strong>1. Data We Collect</strong><br>
+    We only store your Name, Email Address, and a securely hashed version of your password. We do not store, access, or see any of your personal banking details, credit scores, or external financial accounts.
+
+    <strong>2. How We Use It</strong><br>
+    Your information is used strictly to:<br>
+        - Identify you within the Loan Tracker.<br>
+        - Link your account to your specific loan agreements.<br>
+        - Send automated payment confirmations and loan updates via our email partner (Resend).
+
+    <strong>3. Security & Storage</strong><br>
+    Your data is hosted on Supabase servers, utilizing industry-standard encryption and security protocols. We will never sell, share, or trade your personal information with third parties for marketing or any other purpose.
+
+    <strong>4. Data Retention</strong><br>
+    To ensure a clean record for your records, all personal information and associated loan data will be permanently deleted from our database 6 months after the loan is marked as "Completed."
+
+    <strong>5. Your Rights</strong><br>
+    You have the right to access your data or request immediate deletion at any time. For any privacy-related inquiries or to request manual data removal, please contact us at info@zbuk.org.
+
+    <strong>6. Cookies</strong><br>
+    We use essential session cookies to maintain your login status. By using the app, you agree to these functional cookies.
+    </div>
+    """, unsafe_allow_html=True)
