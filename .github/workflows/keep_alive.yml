@@ -8,6 +8,9 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
       - name: Force Supabase Activity (Write Operation)
         # Added -k to fix Error 35
         # Using $(date) to send a fresh timestamp so the DB registers a change
