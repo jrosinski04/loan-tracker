@@ -20,13 +20,19 @@ def send_monthly_reminders():
 
     for loan in loans:
         try:
+            # Getting borrower's name
+            borrower_id = loan.get("borrower_id")
+            user_data = supabase.auth.admin.get_user_by_id(borrower_id).data
+            metadata = user_data.user.user_metadata if user_data.user else {}
+            display_name = metadata.get("display_name") or loan['borrower_email'].split("@")[0]
+
             resend.Emails.send({
                 "from":"info@zbuk.org",
                 "to":[loan["'borrower_email'"]],
                 "subject":"📅 Upcoming Loan Payment Reminder",
                 "html":f"""
-                <h2>Hi {loan["borrower_name"]},</h2>
-                <p>This is a friendly reminder that your next loan payment of <strong>${loan["amount"]}</strong> is due on <strong>{loan["payment_day"]} {datetime.date(today.year, today.month, 1).strftime('%B')}</strong>.</p>
+                <h2>Hi {display_name},</h2>
+                <p>This is a friendly reminder that your next loan payment is due on <strong>tomorrow</strong>.</p>
                 <p>You can view your remaining balance and log your payment at <a href="https://loan-tracker.streamlit.app">https://loan-tracker.streamlit.app</a>.</p>
                 """
             })
@@ -40,14 +46,23 @@ def send_monthly_reminders():
 
     for loan in loans:
         try:
+            # Getting borrower's name
+            borrower_id = loan.get("borrower_id")
+            user_data = supabase.auth.admin.get_user_by_id(borrower_id).data
+            metadata = user_data.user.user_metadata if user_data.user else {}
+            display_name = metadata.get("display_name") or loan['borrower_email'].split("@")[0]
+
             resend.Emails.send({
                 "from":"info@zbuk.org",
                 "to":[loan["'borrower_email'"]],
                 "subject":"📅 Upcoming Loan Payment Reminder",
                 "html":f"""
-                <h2>Hi {loan["borrower_name"]},</h2>
-                <p>This is a friendly reminder that your next loan payment of <strong>${loan["amount"]}</strong> is due today.</p>
+                <h2>Hi {display_name},</h2>
+                <p>This is a friendly reminder that your next loan payment </strong> is due today.</p>
                 <p>You can view your remaining balance and log your payment at <a href="https://loan-tracker.streamlit.app">https://loan-tracker.streamlit.app</a>.</p>
+                <br>
+                <p>If you have already made this payment, please disregard this message.</p>
+                <br>
                 """
             })
             print(f"Reminder sent to {loan['borrower_email']}")
