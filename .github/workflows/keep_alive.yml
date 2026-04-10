@@ -23,6 +23,11 @@ jobs:
           -H "Prefer: resolution=merge-duplicates" \
           -d "{\"id\": 1, \"last_ping\": \"$TIMESTAMP\"}"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Install Playwright
         run: |
           pip install playwright
@@ -32,7 +37,7 @@ jobs:
         run: python keep_alive.py
 
       - name: Upload debug screenshot
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-screenshot
           path: screenshot.png
