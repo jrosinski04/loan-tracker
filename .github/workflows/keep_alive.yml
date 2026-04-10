@@ -23,37 +23,20 @@ jobs:
           -H "Prefer: resolution=merge-duplicates" \
           -d "{\"id\": 1, \"last_ping\": \"$TIMESTAMP\"}"
 
-      - name: Wake up Streamlit (User Simulation)
+      - name: Install Playwright
         run: |
-          
-          APP_URL="https://loan-tracker.streamlit.app/" 
-          
-          for i in {1..3}; do
-            echo "Ping attempt $i..."
-            # -L: Follow redirects
-            # --max-redirs 5: Prevent infinite loops
-            # -b: Use a dummy cookie file (some servers require cookies to be enabled)
-            # Headers: Mimic a real Chrome browser on Windows
-            STATUS=$(curl -s -L --max-redirs 5 -o /dev/null -w "%{http_code}" \
-              -b /tmp/cookies.txt -c /tmp/cookies.txt \
-              -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" \
-              -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" \
-              -H "Accept-Language: en-US,en;q=0.5" \
-              -H "Upgrade-Insecure-Requests: 1" \
-              -H "Sec-Fetch-Dest: document" \
-              -H "Sec-Fetch-Mode: navigate" \
-              -H "Sec-Fetch-Site: none" \
-              -H "Sec-Fetch-User: ?1" \
-              $APP_URL)
-            
-            echo "Response Status: $STATUS"
-            
-            if [ "$STATUS" == "200" ]; then
-              echo "Success! The dashboard is awake."
-              break
-            fi
-            sleep 15
-          done
+          pip install playwright
+          playwright install chromium
+
+      - name: Run Deep Keep-Alive
+        run: python keep_alive.py
+
+      - name: Upload debug screenshot
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-screenshot
+          path: screenshot.png
+
 
       - name: Install dependencies for Reminders
         run: pip install supabase resend
