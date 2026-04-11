@@ -21,9 +21,9 @@ st.markdown("""
                 padding-top: 10px;
             }
 
-            /* Dark Blurry Blue/Purple Gradient Background */
+            /* Dark Blurry Blue/Purple Gradient Background (0d1128 & 1a1025) */
             .stApp {
-                background: linear-gradient(135deg, #0d1128 0%, #1a1025 50%, #0d1128 100%);
+                background: linear-gradient(135deg, #0d1128 0%, #102510 50%, #0d1128 100%);
             }
 
             /* Hide the Streamlit footer and hamburger menu */
