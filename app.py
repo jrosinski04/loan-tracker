@@ -177,8 +177,8 @@ else:
     email = st.session_state.user.email
     username = st.session_state.user.user_metadata.get("display_name") or email.split("@")[0]
 
-    # Fetch loans AND the lender's display name from our new view
-    # We 'join' the lender_names view using the lender_id
+    # Fetching loans AND the lender's display name from view
+    # Joining the lender_names view using the lender_id
     loan_query = supabase.table("loans").select("""
         *,
         lender:lender_names!lender_id(display_name)
@@ -221,7 +221,6 @@ else:
             st.image(IMAGE, width=200)
 
     with col2:
-        # --- ADD THIS: Account Settings UI ---
         with st.popover("⚙️ Settings"):
             st.write("Update Password")
             new_password = st.text_input("New Password", type="password", key="new_pw")
@@ -235,7 +234,6 @@ else:
             
             st.divider()
             
-            # Move your existing logout button inside this settings menu to keep it clean!
             if st.button("Logout", use_container_width=True):
                 supabase.auth.sign_out()
                 cookies.remove("sb-access-token")
@@ -263,12 +261,12 @@ else:
         pay_response = supabase.table("payments").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
         payments = pay_response.data
 
-        # Calculate totals
+        # Calculating totals
         total_paid_raw = sum(p["amount"] for p in payments)
         total_paid = max(total_paid_raw, 0)
         balance = float(loan["total_amount"]) - total_paid_raw
 
-        # Graphical Visual Summary (The Dials)
+        # Graphical Visual Summary (Dials)
         dial_col1, dial_col2 = st.columns(2)
 
         # Dial 1: Total Paid (Green)
@@ -308,7 +306,7 @@ else:
             }
         ))
 
-        # Render the charts in Streamlit
+        # Rendering the charts in Streamlit
         fig1.update_layout(height=300, paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"}, margin=dict(l=10, r=10, t=50, b=10))
         fig2.update_layout(height=300, paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"}, margin=dict(l=10, r=10, t=50, b=10))
         
@@ -321,58 +319,76 @@ else:
 
         st.divider()
 
-        # Record payment
+        # Recording payment
         if can_record:
             st.subheader("Record a Payment")
+
             with st.form("payment_form", clear_on_submit=True):
-                payment_label = "Amount to Lend" if is_lender else "Payment Amount"
                 if is_lender:
-                    amount = st.number_input(payment_label, min_value=20.00, step=1.0)
+                    payment_type = st.selectbox("Payment Type", ["Record payment from borrower", "Lend additional amount"])
+                    amount_label = "Amount"
+                    if payment_type == "Record payment from borrower":
+                        min_val = 20.00
+                        max_val = float(balance)
+                    else:
+                        min_val = 20.00
+                        max_val = None
                 else:
-                    amount = st.number_input(payment_label, min_value=20.00, max_value=float(balance), step=1.0)
+                    amount_label = "Payment Amount"
+                    min_val = 20.00
+                    max_val = float(balance)
+                
+                amount = st.number_input(amount_label, min_value=min_val, max_value=max_val, step=1.0)
                 note = st.text_input("Note (optional)")
 
                 if st.form_submit_button("Submit Payment"):
+                    if is_lender:
+                        if payment_type == "Record payment from borrower":
+                            amt = amount  # positive
+                            email_to = loan["borrower_email"]
+                            subject = f"💸 Payment Recorded by Lender"
+                            html = f"""
+                                <h1>Payment Recorded</h1>
+                                <p>A payment of <strong>£{amount:.2f}</strong> has been recorded towards the loan.</p>
+                                <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
+                            """
+                        else:
+                            amt = -amount  # negative
+                            email_to = loan["borrower_email"]
+                            subject = f"💸 New Loan Payment Recorded by Lender"
+                            html = f"""
+                                <h1>Payment Recorded</h1>
+                                <p><strong>{username}</strong> has lent an additional <strong>£{amount:.2f}</strong>.</p>
+                                <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
+                            """
+                    else:
+                        amt = amount  # positive
+                        email_to = loan["lender_email"]
+                        subject = f"💸 New Loan Payment Received!"
+                        html = f"""
+                            <h1>Payment Received</h1>
+                            <p><strong>{username}</strong> has made a payment of <strong>£{amount:.2f}</strong> towards the loan.</p>
+                            <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
+                        """
+
                     # Insert the payment into Supabase
                     supabase.table("payments").insert({
                         "loan_id": loan['id'],
-                        "amount": -amount if is_lender else amount,
+                        "amount": amt,
                         "note": note,
                         "paid_by": email
                     }).execute()
 
-                    # Send email notification to lender
-                    if is_borrower:
-                        try:
-                            resend.Emails.send({
-                                "from": "info@zbuk.org",
-                                "to": loan["lender_email"],
-                                "subject": f"💸 New Loan Payment Received!",
-                                "html": f"""
-                                    <h1>Payment Received</h1>
-                                    <p><strong>{username}</strong> has made a payment of <strong>£{amount:.2f}</strong> towards the loan.</p>
-                                    <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
-                                """
-                            })
-
-                        except Exception as e:
-                            st.warning("Payment recorded, but failed to send email notification: " + str(e))
-
-                    # Send email notification to borrower
-                    if is_lender:
-                        try:
-                            resend.Emails.send({
-                                "from": "info@zbuk.org",
-                                "to": loan["borrower_email"],
-                                "subject": f"💸 New Loan Payment Recorded by Lender",
-                                "html": f"""
-                                    <h1>Payment Recorded</h1>
-                                    <p><strong>{username}</strong> has lent an additional <strong>£{amount:.2f}</strong>.</p>
-                                    <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
-                                """
-                            })
-                        except Exception as e:
-                            st.warning("Payment recorded, but failed to send email notification: " + str(e))
+                    # Send email notification
+                    try:
+                        resend.Emails.send({
+                            "from": "info@zbuk.org",
+                            "to": email_to,
+                            "subject": subject,
+                            "html": html
+                        })
+                    except Exception as e:
+                        st.warning("Payment recorded, but failed to send email notification: " + str(e))
 
                     st.success("Payment recorded successfully!")
                     st.rerun()
@@ -429,3 +445,7 @@ with st.expander("📄 Privacy Policy"):
     We use essential session cookies to maintain your login status. By using the app, you agree to these functional cookies.
     </div>
     """, unsafe_allow_html=True)
+
+st.markdown("""
+            <div style="text-align: right; font-size: 10px;">App version 1.0.0</div>
+            """, unsafe_allow_html=True)
