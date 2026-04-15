@@ -181,8 +181,9 @@ else:
     # Joining the lender_names view using the lender_id
     loan_query = supabase.table("loans").select("""
         *,
-        lender:lender_names!lender_id(display_name)
-    """).execute()  
+        lender:profiles!lender_id(display_name),
+        borrower:profiles!borrower_id(display_name)
+    """).execute() 
 
     loans = loan_query.data
 
@@ -447,5 +448,5 @@ with st.expander("📄 Privacy Policy"):
     """, unsafe_allow_html=True)
 
 st.markdown("""
-            <div style="text-align: right; font-size: 10px;">App version 1.0.0</div>
+            <div style="text-align: right; font-size: 10px;">App version 1.0.2</div>
             """, unsafe_allow_html=True)
