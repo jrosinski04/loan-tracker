@@ -23,7 +23,7 @@ st.markdown("""
 
             /* Dark Blurry Blue/Purple Gradient Background (0d1128 & 1a1025) */
             .stApp {
-                background: linear-gradient(135deg, #0d1128 0%, #102510 50%, #0d1128 100%);
+                background: linear-gradient(135deg, #0d1128 0%, #1a1025 50%, #0d1128 100%);
             }
 
             /* Hide the Streamlit footer and hamburger menu */
@@ -448,5 +448,5 @@ with st.expander("📄 Privacy Policy"):
     """, unsafe_allow_html=True)
 
 st.markdown("""
-            <div style="text-align: right; font-size: 10px;">App version 1.0.2</div>
+            <div style="text-align: right; font-size: 10px;">App version 1.0.3</div>
             """, unsafe_allow_html=True)
