@@ -141,7 +141,35 @@ def load_session():
             cookies.remove("sb-refresh-token")
     return None
 
+def calculate_payment_totals(payments, total_amount):
+    actual_paid_raw = 0.0
+    virtual_balance = 0.0
+
+    for payment in payments or []:
+        amount = float(payment.get("amount", 0) or 0)
+
+        if bool(payment.get("is_virtual")):
+            virtual_balance += max(amount, 0)
+        actual_paid_raw += amount
+
+    balance = max(float(total_amount) - actual_paid_raw, 0.0)
+    return {"actual_paid_raw": actual_paid_raw, "virtual_balance": virtual_balance, "balance": balance}
+
+def calculate_virtual_balance(payments, withdrawals):
+    virtual_payments = sum(
+        max(float(payment.get("amount", 0) or 0), 0)
+        for payment in payments or []
+        if bool(payment.get("is_virtual"))
+    )
+    confirmed_withdrawals = sum(
+        max(float(withdrawal.get("amount", 0) or 0), 0)
+        for withdrawal in withdrawals or []
+        if withdrawal.get("status") == "confirmed"
+    )
+    return max(virtual_payments - confirmed_withdrawals, 0.0)
+
 user = load_session()
+loan = None
 # Authentication
 
 if user is None:
@@ -206,7 +234,7 @@ else:
         loan = loans[0]
 
     # Main dashboard
-    col1, image, col2 = st.columns([7,2,1])
+    col1, image, virtual_account_header, settings = st.columns([6,2,2,1])
 
     if loan.get('note') == "SEAT IBIZA":
         TITLE = "Car Finance Dashboard"
@@ -221,7 +249,9 @@ else:
         if IMAGE:
             st.image(IMAGE, width=200)
 
-    with col2:
+    virtual_account_header_slot = virtual_account_header.empty()
+
+    with settings:
         with st.popover("⚙️ Settings"):
             st.write("Update Password")
             new_password = st.text_input("New Password", type="password", key="new_pw")
@@ -261,11 +291,91 @@ else:
         # Fetching payment details
         pay_response = supabase.table("payments").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
         payments = pay_response.data
+        withdrawal_response = supabase.table("withdrawals").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
+        withdrawals = withdrawal_response.data
 
         # Calculating totals
-        total_paid_raw = sum(p["amount"] for p in payments)
+        totals = calculate_payment_totals(payments, loan["total_amount"])
+        total_paid_raw = totals["actual_paid_raw"]
         total_paid = max(total_paid_raw, 0)
-        balance = float(loan["total_amount"]) - total_paid_raw
+        balance = totals["balance"]
+        virtual_balance = calculate_virtual_balance(payments, withdrawals)
+
+        if loan.get("virtual_account"):
+            with virtual_account_header_slot.container():
+                with st.popover(f"💷 £{virtual_balance:.2f}", use_container_width=True):
+                    st.subheader("Virtual Account")
+                    st.metric("Available balance", f"£{virtual_balance:.2f}")
+                    st.caption("Withdrawal history can be seen at the bottom of the page.")
+
+                    if is_lender:
+                        if virtual_balance > 0:
+                            with st.form("withdrawal_request_form", clear_on_submit=True):
+                                withdrawal_amount = st.number_input(
+                                    "Amount to request",
+                                    min_value=0.01,
+                                    max_value=float(virtual_balance),
+                                    step=0.01,
+                                )
+                                withdrawal_note = st.text_input("Note (optional)")
+                                request_withdrawal = st.form_submit_button("Request withdrawal", use_container_width=True)
+
+                            if request_withdrawal:
+                                supabase.table("withdrawals").insert({
+                                    "loan_id": loan["id"],
+                                    "amount": withdrawal_amount,
+                                    "status": "pending",
+                                    "requested_by": email,
+                                    "note": withdrawal_note,
+                                }).execute()
+                                try:
+                                    resend.Emails.send({
+                                        "from": "info@zbuk.org",
+                                        "to": loan["borrower_email"],
+                                        "subject": "⚠️ Withdrawal requested from virtual account 💷",
+                                        "html": f"<p>{username} requested a virtual-account withdrawal of <strong>£{withdrawal_amount:.2f}</strong>. You have 14 days to issue the withdrawal.</p>",
+                                    })
+                                except Exception as e:
+                                    st.warning("Withdrawal requested, but failed to send email notification: " + str(e))
+                                st.success("Withdrawal requested successfully!")
+                                st.rerun()
+                        else:
+                            st.caption("No virtual balance available for withdrawal.")
+
+                    if is_borrower:
+                        pending_withdrawals = [w for w in withdrawals if w.get("status") == "pending"]
+                        if pending_withdrawals:
+                            with st.form("record_withdrawal_form", clear_on_submit=True):
+                                selected_withdrawal = st.selectbox(
+                                    "Pending withdrawal",
+                                    pending_withdrawals,
+                                    format_func=lambda withdrawal: f"£{float(withdrawal['amount']):.2f} requested by {withdrawal['requested_by']}",
+                                )
+                                confirm_withdrawal = st.form_submit_button("Record withdrawal", use_container_width=True)
+
+                            if confirm_withdrawal:
+                                selected_amount = float(selected_withdrawal["amount"])
+                                if selected_amount > virtual_balance:
+                                    st.error("This withdrawal is greater than the available virtual balance.")
+                                else:
+                                    update_response = supabase.table("withdrawals").update({
+                                        "status": "confirmed",
+                                        "confirmed_by": email,
+                                    }).eq("id", selected_withdrawal["id"]).eq("status", "pending").execute()
+                                    if not update_response.data:
+                                        st.error("This withdrawal has already been recorded.")
+                                    else:
+                                        try:
+                                            resend.Emails.send({
+                                                "from": "info@zbuk.org",
+                                                "to": loan["lender_email"],
+                                                "subject": "💷 Virtual-account withdrawal recorded ✅",
+                                                "html": f"<p>{username} recorded a virtual-account withdrawal of <strong>£{selected_amount:.2f}</strong>.</p>",
+                                            })
+                                        except Exception as e:
+                                            st.warning("Withdrawal recorded, but failed to send email notification: " + str(e))
+                                        st.success("Withdrawal recorded successfully!")
+                                        st.rerun()
 
         # Graphical Visual Summary (Dials)
         dial_col1, dial_col2 = st.columns(2)
@@ -328,12 +438,8 @@ else:
                 if is_lender:
                     payment_type = st.selectbox("Payment Type", ["Record payment from borrower", "Lend additional amount"])
                     amount_label = "Amount"
-                    if payment_type == "Record payment from borrower":
-                        min_val = 20.00
-                        max_val = float(balance)
-                    else:
-                        min_val = 20.00
-                        max_val = None
+                    min_val = 20.00
+                    max_val = None
                 else:
                     amount_label = "Payment Amount"
                     min_val = 20.00
@@ -341,6 +447,16 @@ else:
                 
                 amount = st.number_input(amount_label, min_value=min_val, max_value=max_val, step=1.0)
                 note = st.text_input("Note (optional)")
+
+                should_offer_virtual_destination = loan.get("virtual_account") and (is_borrower or (is_lender and payment_type == "Record payment from borrower"))
+                if should_offer_virtual_destination:
+                    payment_destination = st.selectbox(
+                        "Payment Destination",
+                        ["Bank account", "Virtual Account"]
+                    )
+                    is_virtual_payment = payment_destination == "Virtual Account"
+                else:
+                    is_virtual_payment = False
 
                 if st.form_submit_button("Submit Payment"):
                     if is_lender:
@@ -369,6 +485,7 @@ else:
                         html = f"""
                             <h1>Payment Received</h1>
                             <p><strong>{username}</strong> has made a payment of <strong>£{amount:.2f}</strong> towards the loan.</p>
+                            <p>The payment has been sent to your {'virtual account' if is_virtual_payment else 'bank account'}.</p>
                             <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
                         """
 
@@ -377,7 +494,8 @@ else:
                         "loan_id": loan['id'],
                         "amount": amt,
                         "note": note,
-                        "paid_by": email
+                        "paid_by": email,
+                        "is_virtual": is_virtual_payment
                     }).execute()
 
                     # Send email notification
@@ -408,6 +526,7 @@ else:
             display_data = [{
                 "Date": p['created_at'][:10],
                 "Amount": f"£{p['amount']:.2f}",
+                "Destination": "Virtual Account" if p['is_virtual'] else "Bank Account",
                 "Remaining": f"£{remaining_dict[p['id']]:.2f}",
                 "Note": p['note'] or "N/A",
             } for p in payments]
@@ -417,7 +536,39 @@ else:
         else:
             st.write("No payments recorded yet.")
 
+        if loan.get("virtual_account") and withdrawals:
+            st.subheader("Virtual Account Withdrawal History")
+            withdrawal_data = [{
+                "Date": withdrawal["created_at"][:10],
+                "Amount": f"£{float(withdrawal['amount']):.2f}",
+                "Status": withdrawal["status"].capitalize(),
+                "Requested By": withdrawal["requested_by"],
+                "Confirmed By": withdrawal.get("confirmed_by") or "Pending",
+                "Note": withdrawal.get("note") or "N/A",
+            } for withdrawal in withdrawals]
+            st.table(pd.DataFrame(withdrawal_data).style.hide(axis="index"))
+
 st.markdown("---")
+if loan and loan.get("virtual_account"):
+    with st.expander("💷 Virtual account explained"):
+        st.markdown("""
+        ### What is the virtual account?
+
+        The virtual account lets a borrower set money aside for the lender without transferring it to the lender's bank account immediately. A borrower can choose **Virtual Account** as the payment destination when recording a payment.
+
+        Virtual-account payments still count towards the loan's total paid and reduce the remaining loan balance. The money is recorded as belonging to the lender, but remains in the virtual account until it is withdrawn.
+
+        ### How withdrawals work
+
+        The lender can see the current virtual-account balance and request a withdrawal at any time, up to the available balance. When a withdrawal is requested, the borrower is notified and is obligated to pay the requested amount to the lender within **14 days**.
+
+        Once the borrower records the withdrawal, it is marked as confirmed and removed from the available virtual-account balance. The withdrawal does not change the loan's total paid or remaining loan balance because the original virtual payment has already been counted towards the loan.
+
+        When requesting a withdrawal, the lender should use the notes field to state how they would like to be paid. Please write **CASH** or **TRANSFER** in the notes so the borrower knows the preferred payout method.
+
+        The virtual account is a record of money set aside for the lender. It does not hold or transfer funds itself, and this app does not access either party's bank account.
+        """)
+
 with st.expander("📄 Privacy Policy"):
     st.markdown("""
     <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6);">
@@ -448,5 +599,5 @@ with st.expander("📄 Privacy Policy"):
     """, unsafe_allow_html=True)
 
 st.markdown("""
-            <div style="text-align: right; font-size: 10px;">App version 1.0.3</div>
+            <div style="text-align: right; font-size: 10px;">App version 1.1.0</div>
             """, unsafe_allow_html=True)

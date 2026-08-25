@@ -18,6 +18,7 @@ CREATE TABLE public.loans (
   lender_can_record_payment boolean NOT NULL,
   borrower_can_record_payment boolean NOT NULL,
   payment_day smallint,
+  virtual_account boolean NOT NULL DEFAULT false,
   CONSTRAINT loans_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.payments (
@@ -27,6 +28,19 @@ CREATE TABLE public.payments (
   paid_by text NOT NULL,
   note text,
   loan_id uuid NOT NULL,
+  is_virtual boolean NOT NULL DEFAULT false,
   CONSTRAINT payments_pkey PRIMARY KEY (id),
   CONSTRAINT payments_loan_id_fkey FOREIGN KEY (loan_id) REFERENCES public.loans(id)
+);
+CREATE TABLE public.withdrawals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT (now() AT TIME ZONE 'utc'::text),
+  loan_id uuid NOT NULL,
+  amount numeric NOT NULL CHECK (amount > 0),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status IN ('pending', 'confirmed')),
+  requested_by text NOT NULL,
+  confirmed_by text,
+  note text,
+  CONSTRAINT withdrawals_pkey PRIMARY KEY (id),
+  CONSTRAINT withdrawals_loan_id_fkey FOREIGN KEY (loan_id) REFERENCES public.loans(id)
 );
