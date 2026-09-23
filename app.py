@@ -1,4 +1,8 @@
 import time
+from datetime import datetime, timedelta
+from math import ceil
+from statistics import median
+
 import streamlit as st
 from supabase import create_client
 from streamlit_cookies_controller import CookieController
@@ -168,6 +172,53 @@ def calculate_virtual_balance(payments, withdrawals):
     )
     return max(virtual_payments - confirmed_withdrawals, 0.0)
 
+def estimate_payoff_date(payments, balance):
+    if balance <= 0:
+        return datetime.now().date(), "Paid off"
+
+    recent_payments = sorted(
+        [
+            payment for payment in payments or []
+            if float(payment.get("amount", 0) or 0) > 0
+        ],
+        key=lambda payment: payment["created_at"],
+    )[-5:]
+
+    if len(recent_payments) < 2:
+        return None, None
+
+    payment_dates = [
+        datetime.fromisoformat(
+            payment["created_at"].replace("Z", "+00:00")
+        )
+        for payment in recent_payments
+    ]
+    intervals = [
+        (later - earlier).days
+        for earlier, later in zip(payment_dates, payment_dates[1:])
+        if (later - earlier).days > 0
+    ]
+
+    if not intervals:
+        return None, None
+
+    typical_payment = median(
+        float(payment["amount"]) for payment in recent_payments
+    )
+    typical_interval = median(intervals)
+    if typical_interval < 15:
+        return None, None
+
+    payments_remaining = ceil(balance / typical_payment)
+    estimated_date = payment_dates[-1].date() + timedelta(
+        days=round(payments_remaining * typical_interval)
+    )
+
+    return estimated_date, (
+        f"Based on approximately £{typical_payment:.2f} "
+        f"every {typical_interval:.0f} days"
+    )
+
 user = load_session()
 loan = None
 # Authentication
@@ -191,7 +242,6 @@ if user is None or not user:
                 st.session_state.user = res.user
                 st.session_state.session = res.session
 
-                from datetime import datetime, timedelta
                 expires = datetime.now() + timedelta(days=7)
 
                 cookies.set("sb-access-token", res.session.access_token, expires=expires, secure=USE_SECURE_COOKIES, same_site="Lax")
@@ -378,7 +428,7 @@ else:
                                         st.rerun()
 
         # Graphical Visual Summary (Dials)
-        dial_col1, dial_col2 = st.columns(2)
+        dial_col1, dial_col2, info_col = st.columns([3,3,2])
 
         # Dial 1: Total Paid (Green)
         fig1 = go.Figure(go.Indicator(
@@ -423,10 +473,15 @@ else:
         
         dial_col1.plotly_chart(fig1, use_container_width=True)
         dial_col2.plotly_chart(fig2, use_container_width=True)
-        
-        remaining = st.columns([1,1,1])
-        with remaining[1]:
+
+        with info_col:
             st.info(f"**Total Amount**: £{loan['total_amount']:.2f}")
+            estimated_payoff, estimate_note = estimate_payoff_date(payments, balance)
+            if estimated_payoff:
+                st.info(
+                    f"**Estimated payoff:** {estimated_payoff:%B %Y}\n\n"
+                    f"{estimate_note}"
+                )
 
         st.divider()
 
@@ -542,8 +597,6 @@ else:
                 "Date": withdrawal["created_at"][:10],
                 "Amount": f"£{float(withdrawal['amount']):.2f}",
                 "Status": withdrawal["status"].capitalize(),
-                "Requested By": withdrawal["requested_by"],
-                "Confirmed By": withdrawal.get("confirmed_by") or "Pending",
                 "Note": withdrawal.get("note") or "N/A",
             } for withdrawal in withdrawals]
             st.table(pd.DataFrame(withdrawal_data).style.hide(axis="index"))
@@ -599,5 +652,5 @@ with st.expander("📄 Privacy Policy"):
     """, unsafe_allow_html=True)
 
 st.markdown("""
-            <div style="text-align: right; font-size: 10px;">App version 1.1.0</div>
+            <div style="text-align: right; font-size: 10px;">App version 1.2.0</div>
             """, unsafe_allow_html=True)
