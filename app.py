@@ -1,4 +1,6 @@
 import time
+import traceback
+import uuid
 from datetime import datetime, timedelta
 from math import ceil
 from statistics import median
@@ -15,6 +17,30 @@ cookies = CookieController()
 TITLE = "Loan Tracker"
 IMAGE = None
 st.set_page_config(page_title=TITLE, page_icon="💸", layout="wide")
+
+
+def show_error_screen(error):
+    error_id = uuid.uuid4().hex[:8].upper()
+
+    st.title("Something went wrong")
+    st.write(
+        "We couldn't load this page. Please report this error to "
+        "info@zbuk.org and include the reference below."
+    )
+    st.code(error_id, language=None)
+
+    with st.expander("See more"):
+        st.caption("Please include these details when contacting support:")
+        st.code(
+            f"Reference: {error_id}\n\n{type(error).__name__}: {error}\n\n"
+            f"{traceback.format_exc()}",
+            language="text",
+        )
+
+
+def stop_with_error(error):
+    show_error_screen(error)
+    st.stop()
 
 ICON_DATA = "💸" 
 st.markdown("""
@@ -105,18 +131,24 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # Initalization of clients using secrets
-supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-resend.api_key = st.secrets["RESEND_API_KEY"]
+try:
+    supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    resend.api_key = st.secrets["RESEND_API_KEY"]
+except Exception as error:
+    stop_with_error(error)
 
 # Store cookies securely in production, but allow a local override for HTTP development.
 USE_SECURE_COOKIES = st.secrets.get("USE_SECURE_COOKIES", True)
 
 # Restore the Supabase session
 if "session" in st.session_state:
-    supabase.auth.set_session(
-        st.session_state.session.access_token, 
-        st.session_state.session.refresh_token
-    )
+    try:
+        supabase.auth.set_session(
+            st.session_state.session.access_token,
+            st.session_state.session.refresh_token
+        )
+    except Exception as error:
+        stop_with_error(error)
 
 def load_session():
     # Checking if user is already logged in (session exists)
@@ -140,7 +172,7 @@ def load_session():
             st.session_state.user = res.user
             st.session_state.session = res.session
             return res.user
-        except Exception as e:
+        except Exception:
             cookies.remove("sb-access-token")
             cookies.remove("sb-refresh-token")
     return None
@@ -248,8 +280,17 @@ if user is None or not user:
                 cookies.set("sb-refresh-token", res.session.refresh_token, expires=expires, secure=USE_SECURE_COOKIES, same_site="Lax")
 
                 st.rerun()
-            except Exception as e:
-                st.error("Login failed: " + str(e))
+            except Exception as error:
+                error_message = str(error).lower()
+                error_code = getattr(error, "code", "")
+
+                if (
+                    error_code == "invalid_credentials"
+                    or "invalid login credentials" in error_message
+                ):
+                    st.info("Incorrect email or password. Please try again.")
+                else:
+                    stop_with_error(error)
 
 else:
     email = st.session_state.user.email
@@ -257,11 +298,14 @@ else:
 
     # Fetching loans AND the lender's display name from view
     # Joining the lender_names view using the lender_id
-    loan_query = supabase.table("loans").select("""
-        *,
-        lender:profiles!lender_id(display_name),
-        borrower:profiles!borrower_id(display_name)
-    """).execute() 
+    try:
+        loan_query = supabase.table("loans").select("""
+            *,
+            lender:profiles!lender_id(display_name),
+            borrower:profiles!borrower_id(display_name)
+        """).execute()
+    except Exception as error:
+        stop_with_error(error)
 
     loans = loan_query.data
 
@@ -310,18 +354,21 @@ else:
                     # This securely updates the password in the Supabase vault
                     supabase.auth.update_user({"password": new_password})
                     st.success("Password updated! Log out and log back in to use the new password.")
-                except Exception as e:
-                    st.error("Failed to update password.")
+                except Exception as error:
+                    stop_with_error(error)
             
             st.divider()
             
             if st.button("Logout", use_container_width=True):
-                supabase.auth.sign_out()
-                cookies.remove("sb-access-token")
-                cookies.remove("sb-refresh-token")
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
+                try:
+                    supabase.auth.sign_out()
+                    cookies.remove("sb-access-token")
+                    cookies.remove("sb-refresh-token")
+                    for key in list(st.session_state.keys()):
+                        del st.session_state[key]
+                    st.rerun()
+                except Exception as error:
+                    stop_with_error(error)
 
     st.divider()
 
@@ -339,10 +386,13 @@ else:
             can_record = True
 
         # Fetching payment details
-        pay_response = supabase.table("payments").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
-        payments = pay_response.data
-        withdrawal_response = supabase.table("withdrawals").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
-        withdrawals = withdrawal_response.data
+        try:
+            pay_response = supabase.table("payments").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
+            payments = pay_response.data
+            withdrawal_response = supabase.table("withdrawals").select("*").eq("loan_id", loan["id"]).order("created_at", desc=True).execute()
+            withdrawals = withdrawal_response.data
+        except Exception as error:
+            stop_with_error(error)
 
         # Calculating totals
         totals = calculate_payment_totals(payments, loan["total_amount"])
@@ -371,22 +421,22 @@ else:
                                 request_withdrawal = st.form_submit_button("Request withdrawal", use_container_width=True)
 
                             if request_withdrawal:
-                                supabase.table("withdrawals").insert({
-                                    "loan_id": loan["id"],
-                                    "amount": withdrawal_amount,
-                                    "status": "pending",
-                                    "requested_by": email,
-                                    "note": withdrawal_note,
-                                }).execute()
                                 try:
+                                    supabase.table("withdrawals").insert({
+                                        "loan_id": loan["id"],
+                                        "amount": withdrawal_amount,
+                                        "status": "pending",
+                                        "requested_by": email,
+                                        "note": withdrawal_note,
+                                    }).execute()
                                     resend.Emails.send({
                                         "from": "info@zbuk.org",
                                         "to": loan["borrower_email"],
                                         "subject": "⚠️ Withdrawal requested from virtual account 💷",
                                         "html": f"<p>{username} requested a virtual-account withdrawal of <strong>£{withdrawal_amount:.2f}</strong>. You have 14 days to issue the withdrawal.</p>",
                                     })
-                                except Exception as e:
-                                    st.warning("Withdrawal requested, but failed to send email notification: " + str(e))
+                                except Exception as error:
+                                    stop_with_error(error)
                                 st.success("Withdrawal requested successfully!")
                                 st.rerun()
                         else:
@@ -408,10 +458,13 @@ else:
                                 if selected_amount > virtual_balance:
                                     st.error("This withdrawal is greater than the available virtual balance.")
                                 else:
-                                    update_response = supabase.table("withdrawals").update({
-                                        "status": "confirmed",
-                                        "confirmed_by": email,
-                                    }).eq("id", selected_withdrawal["id"]).eq("status", "pending").execute()
+                                    try:
+                                        update_response = supabase.table("withdrawals").update({
+                                            "status": "confirmed",
+                                            "confirmed_by": email,
+                                        }).eq("id", selected_withdrawal["id"]).eq("status", "pending").execute()
+                                    except Exception as error:
+                                        stop_with_error(error)
                                     if not update_response.data:
                                         st.error("This withdrawal has already been recorded.")
                                     else:
@@ -422,8 +475,8 @@ else:
                                                 "subject": "💷 Virtual-account withdrawal recorded ✅",
                                                 "html": f"<p>{username} recorded a virtual-account withdrawal of <strong>£{selected_amount:.2f}</strong>.</p>",
                                             })
-                                        except Exception as e:
-                                            st.warning("Withdrawal recorded, but failed to send email notification: " + str(e))
+                                        except Exception as error:
+                                            stop_with_error(error)
                                         st.success("Withdrawal recorded successfully!")
                                         st.rerun()
 
@@ -544,25 +597,25 @@ else:
                             <p><em>Note:</em> {note if note else 'No additional notes provided.'}</p>
                         """
 
-                    # Insert the payment into Supabase
-                    supabase.table("payments").insert({
-                        "loan_id": loan['id'],
-                        "amount": amt,
-                        "note": note,
-                        "paid_by": email,
-                        "is_virtual": is_virtual_payment
-                    }).execute()
-
-                    # Send email notification
                     try:
+                        # Insert the payment into Supabase
+                        supabase.table("payments").insert({
+                            "loan_id": loan['id'],
+                            "amount": amt,
+                            "note": note,
+                            "paid_by": email,
+                            "is_virtual": is_virtual_payment
+                        }).execute()
+
+                        # Send email notification
                         resend.Emails.send({
                             "from": "info@zbuk.org",
                             "to": email_to,
                             "subject": subject,
                             "html": html
                         })
-                    except Exception as e:
-                        st.warning("Payment recorded, but failed to send email notification: " + str(e))
+                    except Exception as error:
+                        stop_with_error(error)
 
                     st.success("Payment recorded successfully!")
                     st.rerun()
@@ -652,5 +705,5 @@ with st.expander("📄 Privacy Policy"):
     """, unsafe_allow_html=True)
 
 st.markdown("""
-            <div style="text-align: right; font-size: 10px;">App version 1.2.0</div>
+            <div style="text-align: right; font-size: 10px;">App version 1.2.1</div>
             """, unsafe_allow_html=True)
