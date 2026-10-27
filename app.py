@@ -566,6 +566,12 @@ else:
                 else:
                     is_virtual_payment = False
 
+                send_notification = (
+                    st.checkbox("Send notification", value=True)
+                    if is_lender
+                    else True
+                )
+
                 if st.form_submit_button("Submit Payment"):
                     if is_lender:
                         if payment_type == "Record payment from borrower":
@@ -608,12 +614,13 @@ else:
                         }).execute()
 
                         # Send email notification
-                        resend.Emails.send({
-                            "from": "info@zbuk.org",
-                            "to": email_to,
-                            "subject": subject,
-                            "html": html
-                        })
+                        if send_notification:
+                            resend.Emails.send({
+                                "from": "info@zbuk.org",
+                                "to": email_to,
+                                "subject": subject,
+                                "html": html
+                            })
                     except Exception as error:
                         stop_with_error(error)
 
@@ -705,5 +712,5 @@ with st.expander("📄 Privacy Policy"):
     """, unsafe_allow_html=True)
 
 st.markdown("""
-            <div style="text-align: right; font-size: 10px;">App version 1.2.1</div>
+            <div style="text-align: right; font-size: 10px;">App version 1.2.2</div>
             """, unsafe_allow_html=True)
